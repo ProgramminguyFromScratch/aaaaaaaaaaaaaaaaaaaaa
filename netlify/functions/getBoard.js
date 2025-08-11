@@ -1,23 +1,15 @@
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
 
-exports.handler = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('pixels')
-      .select('*');
+export async function handler() {
+  const { data, error } = await supabase
+    .from('pixels')
+    .select('*')
 
-    if (error) throw error;
-    return {
-      statusCode: 200,
-      body: JSON.stringify(data),
-    };
-  } catch (err) {
-    console.error('getBoard error', err);
-    return { statusCode: 500, body: 'Error fetching board' };
+  if (error) {
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
   }
-};
+
+  return { statusCode: 200, body: JSON.stringify(data) }
+}

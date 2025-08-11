@@ -1,23 +1,17 @@
-const { createClient } = require('@supabase/supabase-js');
+import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
 
-exports.handler = async (event) => {
-  try {
-    const { x, y, color } = JSON.parse(event.body);
+export async function handler(event) {
+  const { x, y, color } = JSON.parse(event.body)
 
-    // Upsert pixel (insert or update)
-    const { error } = await supabase
-      .from('pixels')
-      .upsert({ x, y, color }, { onConflict: ['x', 'y'] });
+  const { error } = await supabase
+    .from('pixels')
+    .upsert({ x, y, color })
 
-    if (error) throw error;
-    return { statusCode: 200, body: 'OK' };
-  } catch (err) {
-    console.error('setPixel error', err);
-    return { statusCode: 500, body: 'Error setting pixel' };
+  if (error) {
+    return { statusCode: 500, body: JSON.stringify({ error: error.message }) }
   }
-};
+
+  return { statusCode: 200, body: JSON.stringify({ success: true }) }
+}
