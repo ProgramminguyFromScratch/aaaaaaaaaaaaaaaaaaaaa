@@ -1,0 +1,162 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>r/place (Netlify + S3)</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin:12px; background:#f7f7fb; color:#111; }
+  .top { display:flex; gap:12px; align-items:center; margin-bottom:8px; }
+  canvas { image-rendering: pixelated; border:1px solid #ccc; background:white; cursor: crosshair; }
+  .controls { display:flex; gap:8px; align-items:center; }
+  .btn { padding:6px 10px; border-radius:6px; border:1px solid #bbb; background:#fff; cursor:pointer; }
+  .info { font-size:0.9rem; color:#555; }
+  #zoom { width:120px; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="controls">
+      <label>Color <input id="color" type="color" value="#ff4500"></label>
+      <button id="eraser" class="btn">Eraser</button>
+      <label>Zoom <input id="zoom" type="range" min="1" max="20" value="6" id="zoom"></label>
+      <button id="clear" class="btn">Clear</button>
+      <button id="download" class="btn">Download PNG</button>
+    </div>
+    <div style="flex:1"></div>
+    <div class="info">
+      <span id="sizeInfo"></span>
+      &nbsp;|&nbsp;
+      <span id="cooldownInfo">cooldown client-side only</span>
+    </div>
+  </div>
+
+  <canvas id="board"></canvas>
+  <p class="info">Click to place a pixel. Board updates automatically every 2 seconds.</p>
+
+<script>
+const GET_URL = "/.netlify/functions/getBoard";
+const SET_URL = "/.netlify/functions/setPixel";
+const CLEAR_URL = "/.netlify/functions/clear";
+
+let boardW = 0, boardH = 0, pixels = null, scale = 6;
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+const colorInput = document.getElementById('color');
+const zoomInput = document.getElementById('zoom');
+const sizeInfo = document.getElementById('sizeInfo');
+const eraserBtn = document.getElementById('eraser');
+const clearBtn = document.getElementById('clear');
+const downloadBtn = document.getElementById('download');
+
+let lastPlacedAt = 0;
+const cooldownSeconds = 2; // purely client-side courtesy
+
+function drawBoard() {
+  if (!pixels) return;
+  canvas.width = boardW * scale;
+  canvas.height = boardH * scale;
+  for (let y = 0; y < boardH; y++) {
+    for (let x = 0; x < boardW; x++) {
+      ctx.fillStyle = pixels[y][x] || "#ffffff";
+      ctx.fillRect(x*scale, y*scale, scale, scale);
+    }
+  }
+}
+
+async function fetchBoard() {
+  try {
+    const res = await fetch(GET_URL);
+    if (!res.ok) throw new Error("fetch failed");
+    const data = await res.json();
+    boardW = data.width;
+    boardH = data.height;
+    pixels = data.pixels;
+    sizeInfo.textContent = `${boardW} x ${boardH}`;
+    drawBoard();
+  } catch (err) {
+    console.error("fetchBoard error", err);
+  }
+}
+
+async function placePixel(x, y, color) {
+  if (!pixels) return;
+  if (x < 0 || y < 0 || x >= boardW || y >= boardH) return;
+  // optimistic update
+  pixels[y][x] = color;
+  drawBoard();
+  try {
+    const res = await fetch(SET_URL, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({x, y, color})
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      alert("Failed to place pixel: " + text);
+      await fetchBoard();
+    } else {
+      lastPlacedAt = Date.now();
+    }
+  } catch (err) {
+    console.error("placePixel error", err);
+  }
+}
+
+canvas.addEventListener('click', (ev) => {
+  if (!pixels) return;
+  const rect = canvas.getBoundingClientRect();
+  const cx = ev.clientX - rect.left;
+  const cy = ev.clientY - rect.top;
+  const x = Math.floor(cx / scale);
+  const y = Math.floor(cy / scale);
+  const now = Date.now();
+  const passed = (now - lastPlacedAt) / 1000;
+  if (passed < cooldownSeconds) {
+    alert(`Please wait ${Math.ceil(cooldownSeconds - passed)}s`);
+    return;
+  }
+  placePixel(x, y, colorInput.value);
+});
+
+zoomInput.addEventListener('input', (ev) => {
+  scale = parseInt(ev.target.value, 10);
+  drawBoard();
+});
+
+eraserBtn.addEventListener('click', () => colorInput.value = '#ffffff');
+
+clearBtn.addEventListener('click', async () => {
+  if (!confirm('Clear the entire board?')) return;
+  const res = await fetch(CLEAR_URL, { method: "POST" });
+  if (res.ok) fetchBoard(); else alert('Clear failed');
+});
+
+downloadBtn.addEventListener('click', () => {
+  const tmp = document.createElement('canvas');
+  tmp.width = boardW;
+  tmp.height = boardH;
+  const tctx = tmp.getContext('2d');
+  for (let y = 0; y < boardH; y++) {
+    for (let x = 0; x < boardW; x++) {
+      tctx.fillStyle = pixels[y][x] || '#ffffff';
+      tctx.fillRect(x, y, 1, 1);
+    }
+  }
+  tmp.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'board.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  });
+});
+
+setInterval(fetchBoard, 2000);
+fetchBoard();
+</script>
+</body>
+</html>

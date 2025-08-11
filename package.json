@@ -1,0 +1,11 @@
+{
+  "name": "rplace-netlify-blobs",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@netlify/blobs": "^1.0.0"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
