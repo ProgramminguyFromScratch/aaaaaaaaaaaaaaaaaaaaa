@@ -1,8 +1,7 @@
 {
-  "name": "rplace-netlify-blobs",
-  "private": true,
+  "name": "rplace-netlify",
+  "version": "1.0.0",
   "dependencies": {
-    "@netlify/blobs": "^1.0.0"
-  },
-  "engines": { "node": "18.x" }
+    "@supabase/supabase-js": "^2.44.2"
+  }
 }
